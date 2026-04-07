@@ -1,229 +1,369 @@
+#!/usr/bin/env python3
+"""
+Blackjack - A terminal card game with betting, colored cards, and statistics.
+Features: Chip betting, double down, colored suit display, session statistics.
+"""
+
 import random
-# from colorama import Fore, Style # Uncomment if you install colorama
+import os
+import time
 
-# ASCII Art templates for cards
-# We'll use a dictionary for suits to get special characters
-SUIT_SYMBOLS = {
-    'Hearts': '♥',
-    'Diamonds': '♦',
-    'Clubs': '♣',
-    'Spades': '♠'
-}
+# ─── Color Setup (graceful fallback if colorama not installed) ────────────────
 
-CARD_TEMPLATE = [
-    "+-------+",
-    "| {}     |",
-    "|       |",
-    "|   {}   |",
-    "|       |",
-    "|     {} |",
-    "+-------+"
-]
+try:
+    from colorama import Fore, Style, init
+    init(autoreset=True)
+except ImportError:
+    class _NoColor:
+        """Stub so the game works without colorama — just no colors."""
+        def __getattr__(self, _):
+            return ""
+    Fore = Style = _NoColor()
+
+# ─── Constants ────────────────────────────────────────────────────────────────
+
+TITLE = f"""{Fore.CYAN}
+    ╔═══════════════════════════════════╗
+    ║       B L A C K J A C K           ║
+    ║      Terminal Card Game           ║
+    ╚═══════════════════════════════════╝{Style.RESET_ALL}"""
+
+SUITS = ["Hearts", "Diamonds", "Clubs", "Spades"]
+RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
+SUIT_SYMBOLS = {"Hearts": "♥", "Diamonds": "♦", "Clubs": "♣", "Spades": "♠"}
+
+STARTING_CHIPS = 1000
+MIN_BET = 10
+
+# ─── Utility Functions ────────────────────────────────────────────────────────
+
+def clear():
+    """Clear the terminal screen."""
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def divider(width=45):
+    """Print a horizontal divider."""
+    print(f"  {Fore.CYAN}{'─' * width}{Style.RESET_ALL}")
+
+
+def header(text, width=45):
+    """Print a formatted section header."""
+    print(f"\n  {Fore.CYAN}{'─' * width}")
+    print(f"    {text}")
+    print(f"  {'─' * width}{Style.RESET_ALL}")
+
+# ─── Deck & Card Functions ───────────────────────────────────────────────────
 
 def create_deck():
-    """
-    Creates a standard deck of 52 playing cards.
-    Each card is represented as a tuple: (rank, suit).
-    """
-    suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-    ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace']
-    deck = [(rank, suit) for rank in ranks for suit in suits]
+    """Create and shuffle a standard 52-card deck."""
+    deck = [(rank, suit) for rank in RANKS for suit in SUITS]
+    random.shuffle(deck)
     return deck
 
-def shuffle_deck(deck):
-    """Shuffles the given deck of cards in-place."""
-    random.shuffle(deck)
 
-def deal_card(deck):
-    """Deals a single card from the deck."""
-    if not deck:
-        print("Reshuffling the deck!")
-        deck.extend(create_deck()) # Add new cards if deck is empty
-        shuffle_deck(deck)
-    return deck.pop() # Removes and returns the last item
-
-def get_card_value(card):
-    """
-    Returns the numerical value of a card.
-    Handles face cards (Jack, Queen, King) as 10 and Ace as 11 (initially).
-    """
-    rank = card[0]
-    if rank in ['Jack', 'Queen', 'King']:
+def card_value(rank):
+    """Return the point value of a single card rank."""
+    if rank in ("J", "Q", "K"):
         return 10
-    elif rank == 'Ace':
-        return 11 # Ace is initially 11, handled later for 1 if needed
-    else:
-        return int(rank)
+    if rank == "A":
+        return 11
+    return int(rank)
 
-def calculate_hand_value(hand):
-    """
-    Calculates the total value of a hand, handling Aces (1 or 11).
-    """
-    value = 0
-    num_aces = 0
-    for card in hand:
-        card_value = get_card_value(card)
-        value += card_value
-        if card[0] == 'Ace':
-            num_aces += 1
 
-    # Adjust for Aces if hand value is over 21
-    while value > 21 and num_aces > 0:
-        value -= 10 # Change an Ace from 11 to 1
-        num_aces -= 1
-    return value
+def hand_value(hand):
+    """Calculate hand total, adjusting Aces from 11 to 1 as needed."""
+    total = sum(card_value(r) for r, _ in hand)
+    aces = sum(1 for r, _ in hand if r == "A")
+    while total > 21 and aces:
+        total -= 10
+        aces -= 1
+    return total
 
-def get_ascii_card(card, hidden=False):
-    """
-    Generates ASCII art for a single card.
-    If hidden is True, generates a blank card.
-    """
+
+def is_blackjack(hand):
+    """Check if a two-card hand is a natural 21."""
+    return len(hand) == 2 and hand_value(hand) == 21
+
+# ─── Card Display ────────────────────────────────────────────────────────────
+
+def card_art(rank, suit, hidden=False):
+    """Return 7 lines of ASCII art for one card."""
     if hidden:
         return [
-            "+-------+",
-            "|░░░░░░░|",
-            "|░░░░░░░|",
-            "|░░░░░░░|",
-            "|░░░░░░░|",
-            "|░░░░░░░|",
-            "+-------+"
+            "┌───────┐",
+            "│▒▒▒▒▒▒▒│",
+            "│▒▒▒▒▒▒▒│",
+            "│▒▒▒▒▒▒▒│",
+            "│▒▒▒▒▒▒▒│",
+            "│▒▒▒▒▒▒▒│",
+            "└───────┘",
         ]
-
-    rank = card[0]
-    suit = SUIT_SYMBOLS[card[1]] # Get the symbol for the suit
-
-    # Adjust rank for display if it's '10' (needs more space)
-    display_rank_top = rank.ljust(2) if rank == '10' else rank.ljust(1)
-    display_rank_bottom = rank.rjust(2) if rank == '10' else rank.rjust(1)
-
-    # You could add color here using Colorama:
-    # if card[1] in ['Hearts', 'Diamonds']:
-    #     color_code = Fore.RED
-    # else:
-    #     color_code = Fore.BLACK # Or just use default
-    # return [
-    #     color_code + CARD_TEMPLATE[0] + Style.RESET_ALL,
-    #     color_code + CARD_TEMPLATE[1].format(display_rank_top) + Style.RESET_ALL,
-    #     color_code + CARD_TEMPLATE[2] + Style.RESET_ALL,
-    #     color_code + CARD_TEMPLATE[3].format(suit) + Style.RESET_ALL,
-    #     color_code + CARD_TEMPLATE[4] + Style.RESET_ALL,
-    #     color_code + CARD_TEMPLATE[5].format(display_rank_bottom) + Style.RESET_ALL,
-    #     color_code + CARD_TEMPLATE[6] + Style.RESET_ALL
-    # ]
-    # For now, without colorama:
+    sym = SUIT_SYMBOLS[suit]
+    color = Fore.RED if suit in ("Hearts", "Diamonds") else Fore.WHITE
+    r = Style.RESET_ALL
     return [
-        CARD_TEMPLATE[0],
-        CARD_TEMPLATE[1].format(display_rank_top),
-        CARD_TEMPLATE[2],
-        CARD_TEMPLATE[3].format(suit),
-        CARD_TEMPLATE[4],
-        CARD_TEMPLATE[5].format(display_rank_bottom),
-        CARD_TEMPLATE[6]
+        f"{color}┌───────┐{r}",
+        f"{color}│{rank:<2}     │{r}",
+        f"{color}│       │{r}",
+        f"{color}│   {sym}   │{r}",
+        f"{color}│       │{r}",
+        f"{color}│     {rank:>2}│{r}",
+        f"{color}└───────┘{r}",
     ]
 
 
-def display_hand(hand, player_name, hide_one=False):
-    """
-    Displays the cards in a hand using ASCII art.
-    If hide_one is True (for dealer's initial hand), conceals the first card.
-    """
-    print(f"\n{player_name}'s hand:")
-
-    if not hand: # Handle empty hand case
-        print("  (No cards)")
-        return
-
-    # Get ASCII art for each card in the hand
-    card_arts = []
-    for i, card in enumerate(hand):
-        if hide_one and i == 1: # Hide the second card for the dealer
-            card_arts.append(get_ascii_card(card, hidden=True))
+def show_hand(hand, label, hide_second=False):
+    """Display a hand of cards side-by-side with a value line."""
+    print(f"\n  {Fore.CYAN}{label}{Style.RESET_ALL}")
+    arts = []
+    for i, (rank, suit) in enumerate(hand):
+        if hide_second and i == 1:
+            arts.append(card_art(rank, suit, hidden=True))
         else:
-            card_arts.append(get_ascii_card(card, hidden=False))
+            arts.append(card_art(rank, suit))
+    for row in range(7):
+        print("  " + " ".join(art[row] for art in arts))
+    if not hide_second:
+        val = hand_value(hand)
+        if val > 21:
+            color = Fore.RED
+        elif val == 21:
+            color = Fore.GREEN
+        else:
+            color = Fore.WHITE
+        print(f"  {color}Value: {val}{Style.RESET_ALL}")
+    else:
+        print(f"  Value: {card_value(hand[0][0])} + ?")
 
-    # Print the cards row by row to display them side-by-side
-    for row_idx in range(len(CARD_TEMPLATE)):
-        line = ""
-        for card_art in card_arts:
-            line += card_art[row_idx] + "  " # Add space between cards
-        print(line)
 
-    if not hide_one or (hide_one and player_name == "Your"): # Always show player's total, and dealer's total when revealed
-        print(f"  Total value: {calculate_hand_value(hand)}")
+def show_table(player, dealer, hide_dealer=True, chips=None, bet=None):
+    """Render the full table: title, chip info, both hands."""
+    clear()
+    print(TITLE)
+    if chips is not None:
+        print(f"  {Fore.YELLOW}Chips: {chips}{Style.RESET_ALL}    "
+              f"{Fore.WHITE}Bet: {bet}{Style.RESET_ALL}")
+        divider()
+    show_hand(dealer, "DEALER", hide_second=hide_dealer)
+    show_hand(player, "YOUR HAND")
 
+# ─── Game Logic ───────────────────────────────────────────────────────────────
 
-def play_blackjack():
-    """Main function to play a round of Blackjack."""
-    print("Welcome to Blackjack!")
-
-    deck = create_deck()
-    shuffle_deck(deck)
-
-    player_hand = []
-    dealer_hand = []
-
-    # Initial deal
-    player_hand.append(deal_card(deck))
-    dealer_hand.append(deal_card(deck))
-    player_hand.append(deal_card(deck))
-    dealer_hand.append(deal_card(deck))
-
-    # Player's turn
-    player_bust = False
+def get_bet(chips):
+    """Prompt the player for a valid bet amount."""
     while True:
-        display_hand(player_hand, "Your")
-        display_hand(dealer_hand, "Dealer's", hide_one=True) # Hide one of dealer's cards
+        try:
+            raw = input(f"\n  Place your bet ({MIN_BET}-{chips}): ").strip()
+            bet = int(raw)
+            if MIN_BET <= bet <= chips:
+                return bet
+            print(f"  {Fore.RED}Bet must be between {MIN_BET} and {chips}.{Style.RESET_ALL}")
+        except ValueError:
+            print(f"  {Fore.RED}Enter a number.{Style.RESET_ALL}")
 
-        player_value = calculate_hand_value(player_hand)
 
-        if player_value == 21:
-            display_hand(player_hand, "Your") # Show full hand for Blackjack
-            print("Blackjack! You win!")
-            break
-        elif player_value > 21:
-            display_hand(player_hand, "Your") # Show full hand when busting
-            print("Bust! Your hand is over 21. You lose.")
-            player_bust = True
-            break
+def player_turn(deck, player, dealer, chips, bet):
+    """
+    Handle the player's turn (hit / stand / double down).
+    Returns (hand, final_bet, busted).
+    """
+    while True:
+        show_table(player, dealer, hide_dealer=True, chips=chips, bet=bet)
+        val = hand_value(player)
 
-        choice = input("Do you want to [h]it or [s]tand? ").lower()
-        if choice == 'h':
-            player_hand.append(deal_card(deck))
-        elif choice == 's':
-            print("You chose to stand.")
-            break
+        if val >= 21:
+            return player, bet, val > 21
+
+        options = ["[H]it", "[S]tand"]
+        can_double = len(player) == 2 and chips >= bet * 2
+        if can_double:
+            options.append("[D]ouble")
+        print(f"\n  {' | '.join(options)}")
+
+        choice = input(f"  {Fore.CYAN}> {Style.RESET_ALL}").strip().lower()
+
+        if choice in ("h", "hit"):
+            player.append(deck.pop())
+
+        elif choice in ("s", "stand"):
+            return player, bet, False
+
+        elif choice in ("d", "double") and can_double:
+            bet *= 2
+            player.append(deck.pop())
+            show_table(player, dealer, hide_dealer=True, chips=chips, bet=bet)
+            time.sleep(0.5)
+            return player, bet, hand_value(player) > 21
+
         else:
-            print("Invalid choice. Please enter 'h' or 's'.")
+            print(f"  {Fore.RED}Invalid choice.{Style.RESET_ALL}")
+            time.sleep(0.5)
 
-    # Dealer's turn (only if player hasn't busted)
-    if not player_bust:
-        print("\nDealer's turn:")
-        display_hand(dealer_hand, "Dealer's", hide_one=False) # Reveal dealer's second card
 
-        while calculate_hand_value(dealer_hand) < 17:
-            print("Dealer hits...")
-            dealer_hand.append(deal_card(deck))
-            display_hand(dealer_hand, "Dealer's", hide_one=False)
+def dealer_turn(deck, dealer, player, chips, bet):
+    """Reveal the dealer's hand and draw to 17."""
+    show_table(player, dealer, hide_dealer=False, chips=chips, bet=bet)
+    time.sleep(0.8)
 
-        dealer_value = calculate_hand_value(dealer_hand)
+    while hand_value(dealer) < 17:
+        dealer.append(deck.pop())
+        show_table(player, dealer, hide_dealer=False, chips=chips, bet=bet)
+        print(f"\n  {Fore.YELLOW}Dealer hits...{Style.RESET_ALL}")
+        time.sleep(0.8)
 
-        if dealer_value > 21:
-            print("Dealer busts! You win!")
+    dv = hand_value(dealer)
+    if dv <= 21:
+        print(f"\n  {Fore.YELLOW}Dealer stands on {dv}.{Style.RESET_ALL}")
+        time.sleep(0.5)
+
+
+def resolve(player, dealer, bet, player_bj):
+    """Determine outcome. Returns (message, chip_payout)."""
+    pv = hand_value(player)
+    dv = hand_value(dealer)
+    dealer_bj = is_blackjack(dealer)
+
+    if player_bj and dealer_bj:
+        return "Push — both have Blackjack!", 0
+    if player_bj:
+        return "BLACKJACK! Pays 3:2!", int(bet * 1.5)
+    if dealer_bj:
+        return "Dealer has Blackjack!", -bet
+    if pv > 21:
+        return "Bust! You lose.", -bet
+    if dv > 21:
+        return "Dealer busts! You win!", bet
+    if pv > dv:
+        return "You win!", bet
+    if dv > pv:
+        return "Dealer wins.", -bet
+    return "Push — it's a tie!", 0
+
+
+def play_hand(deck, chips, stats):
+    """Play a single hand of Blackjack. Returns updated chip count."""
+    # Reshuffle when deck runs low
+    if len(deck) < 15:
+        deck.clear()
+        deck.extend(create_deck())
+
+    clear()
+    print(TITLE)
+    print(f"  {Fore.YELLOW}Chips: {chips}{Style.RESET_ALL}\n")
+
+    bet = get_bet(chips)
+
+    # Deal initial cards
+    player = [deck.pop(), deck.pop()]
+    dealer = [deck.pop(), deck.pop()]
+
+    player_bj = is_blackjack(player)
+    busted = False
+
+    if not player_bj:
+        player, bet, busted = player_turn(deck, player, dealer, chips, bet)
+
+    # Dealer plays unless player busted
+    if not busted and not player_bj:
+        dealer_turn(deck, dealer, player, chips, bet)
+    elif player_bj:
+        # Just reveal the dealer's cards
+        show_table(player, dealer, hide_dealer=False, chips=chips, bet=bet)
+        time.sleep(0.5)
+
+    # Final reveal
+    show_table(player, dealer, hide_dealer=False, chips=chips, bet=bet)
+
+    msg, payout = resolve(player, dealer, bet, player_bj)
+
+    # Display result
+    if payout > 0:
+        print(f"\n  {Fore.GREEN}{'═' * 38}")
+        print(f"    {msg}  (+{payout} chips)")
+        print(f"  {'═' * 38}{Style.RESET_ALL}")
+        stats["won"] += 1
+        stats["biggest_win"] = max(stats["biggest_win"], payout)
+    elif payout < 0:
+        print(f"\n  {Fore.RED}{'═' * 38}")
+        print(f"    {msg}  ({payout} chips)")
+        print(f"  {'═' * 38}{Style.RESET_ALL}")
+        stats["lost"] += 1
+    else:
+        print(f"\n  {Fore.YELLOW}{'═' * 38}")
+        print(f"    {msg}")
+        print(f"  {'═' * 38}{Style.RESET_ALL}")
+        stats["pushed"] += 1
+
+    stats["played"] += 1
+    new_chips = chips + payout
+    stats["peak"] = max(stats["peak"], new_chips)
+    return new_chips
+
+
+def show_final_stats(stats, chips):
+    """Display end-of-session statistics."""
+    played = stats["played"]
+    rate = f"{stats['won'] / played * 100:.0f}%" if played > 0 else "N/A"
+    header("SESSION STATISTICS")
+    print(f"""
+  Hands Played  : {Fore.WHITE}{played}{Style.RESET_ALL}
+  Wins          : {Fore.GREEN}{stats['won']}{Style.RESET_ALL}
+  Losses        : {Fore.RED}{stats['lost']}{Style.RESET_ALL}
+  Pushes        : {Fore.YELLOW}{stats['pushed']}{Style.RESET_ALL}
+  Win Rate      : {Fore.CYAN}{rate}{Style.RESET_ALL}
+  Biggest Win   : {Fore.GREEN}+{stats['biggest_win']} chips{Style.RESET_ALL}
+  Peak Chips    : {Fore.YELLOW}{stats['peak']}{Style.RESET_ALL}
+  Final Chips   : {Fore.CYAN}{chips}{Style.RESET_ALL}
+""")
+
+# ─── Entry Point ──────────────────────────────────────────────────────────────
+
+def main():
+    """Main game loop."""
+    stats = {
+        "played": 0, "won": 0, "lost": 0, "pushed": 0,
+        "biggest_win": 0, "peak": STARTING_CHIPS,
+    }
+    chips = STARTING_CHIPS
+    deck = create_deck()
+
+    try:
+        clear()
+        print(TITLE)
+        print(f"  You start with {Fore.YELLOW}{STARTING_CHIPS}{Style.RESET_ALL} chips.")
+        print(f"  Minimum bet: {Fore.WHITE}{MIN_BET}{Style.RESET_ALL}")
+        print(f"\n  Rules: Dealer stands on 17. Blackjack pays 3:2.")
+        print(f"  Double down available on your first two cards.\n")
+        input(f"  Press {Fore.CYAN}Enter{Style.RESET_ALL} to play... ")
+
+        while chips >= MIN_BET:
+            chips = play_hand(deck, chips, stats)
+
+            if chips < MIN_BET:
+                print(f"\n  {Fore.RED}Out of chips! Game over.{Style.RESET_ALL}")
+                break
+
+            print(f"\n  {Fore.CYAN}Chips: {chips}{Style.RESET_ALL}")
+            again = input(f"\n  Play again? [Y/n]: ").strip().lower()
+            if again in ("n", "no"):
+                break
+
+        # Session summary
+        clear()
+        show_final_stats(stats, chips)
+        profit = chips - STARTING_CHIPS
+        if profit > 0:
+            print(f"  {Fore.GREEN}Profit: +{profit} chips!{Style.RESET_ALL}")
+        elif profit < 0:
+            print(f"  {Fore.RED}Loss: {profit} chips.{Style.RESET_ALL}")
         else:
-            # Compare hands to determine winner
-            print("\n--- Final Hands ---")
-            display_hand(player_hand, "Your")
-            display_hand(dealer_hand, "Dealer's")
+            print(f"  {Fore.YELLOW}Broke even!{Style.RESET_ALL}")
+        print(f"\n  {Fore.CYAN}Thanks for playing Blackjack!{Style.RESET_ALL}\n")
 
-            if player_value > dealer_value:
-                print("You win!")
-            elif dealer_value > player_value:
-                print("Dealer wins!")
-            else:
-                print("It's a push! (Tie)")
+    except KeyboardInterrupt:
+        print(f"\n\n  {Fore.CYAN}Thanks for playing!{Style.RESET_ALL}\n")
 
-    print("\nThanks for playing Blackjack!")
 
-# Run the game
 if __name__ == "__main__":
-    play_blackjack()
+    main()
