@@ -4,14 +4,14 @@ A terminal Blackjack game built in Python with colored card art, chip betting, d
 
 ## Features
 
-- **Colored ASCII Card Art** — Box-drawing card borders with red Hearts/Diamonds and white Clubs/Spades
-- **Chip Betting System** — Start with 1,000 chips, place bets each hand, try to grow your stack
-- **Double Down** — Double your bet on the first two cards for one extra card
-- **Blackjack Pays 3:2** — Natural 21 earns 1.5x your bet
-- **Proper Dealer AI** — Dealer hits on 16 and below, stands on 17+
-- **Session Statistics** — Tracks hands played, win rate, biggest win, peak chips, and final profit/loss
-- **Auto-Reshuffle** — Deck automatically reshuffles when it runs low
-- **Clean Interface** — Clear-screen transitions, formatted results, and colored feedback
+- **Colored ASCII Card Art**: Box-drawing card borders with red Hearts/Diamonds and white Clubs/Spades
+- **Chip Betting System**: Start with 1,000 chips, place bets each hand, try to grow your stack
+- **Double Down**: Double your bet on the first two cards for one extra card
+- **Blackjack Pays 3:2**: Natural 21 earns 1.5x your bet
+- **Proper Dealer AI**: Dealer hits on 16 and below, stands on 17+
+- **Session Statistics**: Tracks hands played, win rate, biggest win, peak chips, and final profit/loss
+- **Auto-Reshuffle**: Deck automatically reshuffles when it runs low
+- **Clean Interface**: Clear-screen transitions, formatted results, and colored feedback
 
 ## Preview
 
@@ -50,7 +50,7 @@ A terminal Blackjack game built in Python with colored card art, chip betting, d
 ## Requirements
 
 - Python 3.7+
-- **colorama** (optional — the game works without it, just no colors)
+- **colorama** (optional, the game works without it, just no colors)
 
 ## Getting Started
 
@@ -78,7 +78,7 @@ A terminal Blackjack game built in Python with colored card art, chip betting, d
 4. Choose to **Hit** (draw a card), **Stand** (keep your hand), or **Double Down** (double your bet, draw one card)
 5. Try to get as close to **21** as possible without going over
 6. The dealer reveals their hidden card and draws to 17
-7. Closest to 21 wins — bust over 21 and you lose automatically
+7. Closest to 21 wins, bust over 21 and you lose automatically
 
 ## Rules
 
